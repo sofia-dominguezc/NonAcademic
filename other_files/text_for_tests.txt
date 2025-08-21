@@ -1,0 +1,15 @@
+Sofia Dominguez
+
+This is a document to learn how to open and edit files.I liked going apple picking.It was fun.
+I liked going apple picking.
+
+It was fun.
+I liked going apple picking.
+It was fun.
+I've been feeling better lately.
+I like looking like a girl. 
+Yess
+I've been feeling better lately.
+I like looking like a girl. 
+Yess
+'with' always closes the file and makes sure no errors happen
