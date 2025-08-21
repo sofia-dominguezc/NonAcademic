@@ -3,3 +3,4 @@ py_env/
 datasets/
 .prof
 .pytest_cache
+__pycache__

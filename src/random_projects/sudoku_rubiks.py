@@ -24,7 +24,6 @@ def dict_print(dic):
 
 class Vertex:
     """Parent class to represent pieces (corners/edges) and positions"""
-    all_instances: dict[tuple[int, ...], Vertex] = {}
 
     def __init__(
         self,
@@ -50,9 +49,6 @@ class Vertex:
         self.vertex_id = vertex_id
         self.group_id = group_id
         self.size = len(group)
-        # if self.identifier not in Vertex.all_instances:
-        #     self.all_instances[self.identifier] = self
-        # self.rotations() = self._get_rotations()
 
     @property
     def identifier(self) -> tuple[int, ...]:
@@ -65,11 +61,6 @@ class Vertex:
             j = (self.vertex_id + i) % self.size
             rot = self.__class__(self.group[j], self.group, j, self.group_id)
             out.append(rot)
-            # identifier = (self.class_id, j, self.group_id, self.size)
-            # if identifier in Vertex.all_instances:
-            #     out.append(Vertex.all_instances[identifier])
-            # else:
-            #     out.append(self.__class__(self.group[j], self.group, j, self.group_id))
         self._rotations = out
 
     def rotations(self):
