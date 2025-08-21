@@ -1,9 +1,9 @@
 from __future__ import annotations
 import sys
 from collections import defaultdict
-from typing import Union, Optional, TypeVar, Generic, Iterator
+from typing import Union, Optional, Type
+from itertools import product
 
-T = TypeVar('T')
 num_pieces = 6 * 1 + 12 * 2 + 8 * 3
 
 # Here I solve the sudoku rubik's cube
@@ -24,6 +24,7 @@ def dict_print(dic):
 
 class Vertex:
     """Parent class to represent pieces (corners/edges) and positions"""
+    all_instances: dict[tuple[int, ...], Vertex] = {}
 
     def __init__(
         self,
@@ -49,13 +50,26 @@ class Vertex:
         self.vertex_id = vertex_id
         self.group_id = group_id
         self.size = len(group)
+        # if self.identifier not in Vertex.all_instances:
+        #     self.all_instances[self.identifier] = self
+        # self.rotations() = self._get_rotations()
+
+    @property
+    def identifier(self) -> tuple[int, ...]:
+        return (self.class_id, self.vertex_id, self.group_id, self.size)
 
     def _get_rotations(self):
         """All rotations of the vertex in order"""
         out: list[Vertex] = []
         for i in range(self.size):
             j = (self.vertex_id + i) % self.size
-            out.append(self.__class__(self.group[j], self.group, j, self.group_id))
+            rot = self.__class__(self.group[j], self.group, j, self.group_id)
+            out.append(rot)
+            # identifier = (self.class_id, j, self.group_id, self.size)
+            # if identifier in Vertex.all_instances:
+            #     out.append(Vertex.all_instances[identifier])
+            # else:
+            #     out.append(self.__class__(self.group[j], self.group, j, self.group_id))
         self._rotations = out
 
     def rotations(self):
@@ -69,7 +83,7 @@ class Vertex:
     def __len__(self) -> int:
         return self.size
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: Vertex) -> bool:
         return (
             isinstance(other, Vertex)
             and (self.vertex_id == other.vertex_id)
@@ -82,10 +96,18 @@ class Vertex:
         return str([r.value for r in self.rotations()])
 
     def __repr__(self) -> str:
-        return self.__class__.__name__ + f"({repr(self.value)}, {self.group}, {self.vertex_id}, {self.group_id})"
+        return (
+            self.__class__.__name__ +
+            f"({repr(self.value)}, {self.group}, {self.vertex_id}, {self.group_id})"
+        )
+
+    def _get_hash(self):
+        self._hash = hash((self.class_id, self.vertex_id, self.group_id, self.size))
 
     def __hash__(self) -> int:
-        return hash((self.class_id, self.vertex_id, self.group_id, self.size))
+        if not hasattr(self, "_hash"):
+            self._get_hash()
+        return self._hash
 
     @property
     def graph(self) -> dict[Vertex, set[Vertex]]:
@@ -97,13 +119,11 @@ class Vertex:
 
 class PositionVertex(Vertex):
     """Class to represent positions of corners and edges"""
-    obj_name = "Position"
     class_id = 0
     graph: dict[PositionVertex, set[PositionVertex]] = defaultdict(set)
 
 class PieceVertex(Vertex):
     """Class to represent corners and edges"""
-    obj_name = "Piece"
     class_id = 1
     graph: dict[PieceVertex, set[PieceVertex]] = defaultdict(set)
 
@@ -111,25 +131,25 @@ class PieceVertex(Vertex):
 class WeakLinks:
     """
     Undirected graph class whose edges can be updated.
-    graph[vertex] is its set of neighbors.
+    Provides O(1) access to a vertex with minimal degree after initialization.
     """
     def __init__(self, adjacency: Optional[dict] = None):
         self._adjacency: dict[Vertex, set[Vertex]] = adjacency or defaultdict(set)
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: Vertex, value: Vertex):
         """graph[k] = v adds the edge (k, v)"""
         self._adjacency[key].add(value)
         self._adjacency[value].add(key)
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: Vertex):
         """Removes all edges of a vertex if it exists"""
         neighbors = self._adjacency.get(key, set())
         for neighbor in tuple(neighbors):
             self.remove_edge(key, neighbor)
-        if key in self._adjacency and not self._adjacency[key]:
+        if key in self._adjacency:
             del self._adjacency[key]
 
-    def remove_edge(self, v1, v2):
+    def remove_edge(self, v1: Vertex, v2: Vertex):
         """Removes the edge (v1, v2) if it exists"""
         if v1 in self._adjacency:
             self._adjacency[v1].discard(v2)
@@ -153,9 +173,6 @@ class WeakLinks:
 
     def __iter__(self):
         return iter(self._adjacency)
-
-    def items(self):
-        return self._adjacency.items()
 
     def items(self):
         return self._adjacency.items()
@@ -220,14 +237,13 @@ class StrongLinks:
 
 
 def init_graph(
-        subclass: type,
-        vertex_groups: Union[list[list[str]], list[list[int]]],
+    subclass: Type[Vertex],
+    vertex_groups: Union[list[list[str]], list[list[int]]],
 ) -> None:
     """
     Initializes graph in the subclass from the given vertex groups.
     Should only be called once for PositionVertex and PieceVertex.
     """
-    subclass.graph = defaultdict(set)
     # initialize empty graph
     for group_id, vertex_group in enumerate(vertex_groups):
         for vertex_id, vertex_value in enumerate(vertex_group):
@@ -241,7 +257,7 @@ def init_graph(
 
 
 def initialize_links(
-        fixed_values: dict[str, list[int]],
+    fixed_values: dict[str, list[int]],
 ) -> tuple[WeakLinks, StrongLinks]:
     """
     Initializes graph of weak and strong links between pieces and positions and
@@ -283,6 +299,7 @@ def initialize_links(
             for pos_neigh in pos.neighbors():
                 for piece_neigh_rot, pos_neigh_rot in zip(piece_neigh.rotations(), pos_neigh.rotations()):
                     secondary_non_weak_links[piece_neigh_rot] = pos_neigh_rot
+
     weak_links = WeakLinks()
     for piece in PieceVertex.graph:
         if piece in strong_links:  # filter the strong link condition
@@ -299,17 +316,17 @@ def initialize_links(
     return weak_links, strong_links
 
 
-def choose_next(weak_links: WeakLinks, strong_links: StrongLinks) -> Union[Vertex, bool]:
+def choose_next(
+    weak_links: WeakLinks,
+    strong_links: StrongLinks
+) -> Union[Vertex, bool]:
     """
     Get the position/piece that has the least number of weak links.
     If a position has no weak or strong links, it returns None.
-    NOTE: a smarter data structure like a heap can optimize this a lot
     """
     min_links = float('inf')
     chosen_element = len(strong_links) == num_pieces
     for element, neighbors in weak_links.items():
-        if element in strong_links:  # element has been matched
-            continue
         if not neighbors:  # element can't be matched
             return False
         if len(neighbors) < min_links:
