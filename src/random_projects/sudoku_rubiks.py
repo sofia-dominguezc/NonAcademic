@@ -1,8 +1,9 @@
+from __future__ import annotations
 import sys
 from collections import defaultdict
-from typing import Union, Optional, TypeVar, Generic, Any
+from typing import Union, Optional, Type
+from itertools import product
 
-T = TypeVar('T')
 num_pieces = 6 * 1 + 12 * 2 + 8 * 3
 
 # Here I solve the sudoku rubik's cube
@@ -23,13 +24,14 @@ def dict_print(dic):
 
 class Vertex:
     """Parent class to represent pieces (corners/edges) and positions"""
+
     def __init__(
         self,
         value: Union[str, int],
         group: Union[list[str], list[int]],
         vertex_id: Optional[int] = None,
         group_id: Optional[int] = None,
-    ) -> None:
+    ):
         """
         value: int for pieces, str for positions
         group: values of all elements of the same piece/position. Should
@@ -40,87 +42,113 @@ class Vertex:
             - For pieces, it's the piece index
             - For fixed values, it's the face index
             - For faces, it's the fixed value index
+        vertex_id, group_id, class_id, size identify the instance
         """
         self.value = value
         self.group = group
         self.vertex_id = vertex_id
         self.group_id = group_id
+        self.size = len(group)
+
+    def _get_rotations(self):
+        """All rotations of the vertex in order"""
+        out: list[Vertex] = []
+        for i in range(self.size):
+            j = (self.vertex_id + i) % self.size
+            rot = self.__class__(self.group[j], self.group, j, self.group_id)
+            out.append(rot)
+        self._rotations = out
 
     def rotations(self):
-        """All rotations of the vertex in order"""
-        for i in range(len(self.group)):
-            j = (self.vertex_id + i) % len(self.group)
-            yield self.__class__(self.group[j], self.group, j, self.group_id)
+        if not hasattr(self, "_rotations"):
+            self._get_rotations()
+        return self._rotations
 
-    def neighbors(self):
+    def neighbors(self) -> set[Vertex]:
         return self.graph[self]
 
-    def __len__(self):
-        return len(self.group)
+    def __len__(self) -> int:
+        return self.size
 
-    def __eq__(self, other):
+    def __eq__(self, other: Vertex) -> bool:
         return (
             isinstance(other, Vertex)
-            and (self.value == other.value)
-            and (self.group == other.group)
             and (self.vertex_id == other.vertex_id)
             and (self.group_id == other.group_id)
+            and (self.class_id == other.class_id)
+            and (self.size == other.size)
         )
 
-    def __str__(self):
-        return str(list(r.value for r in self.rotations()))
+    def __str__(self) -> str:
+        return str([r.value for r in self.rotations()])
 
-    def __repr__(self):
-        return self.__class__.__name__ + f"({repr(self.value)}, {self.group}, {self.vertex_id}, {self.group_id})"
+    def __repr__(self) -> str:
+        return (
+            self.__class__.__name__ +
+            f"({repr(self.value)}, {self.group}, {self.vertex_id}, {self.group_id})"
+        )
 
-    def __hash__(self):
-        return hash(repr(self))
+    def _get_hash(self):
+        self._hash = hash((self.class_id, self.vertex_id, self.group_id, self.size))
+
+    def __hash__(self) -> int:
+        if not hasattr(self, "_hash"):
+            self._get_hash()
+        return self._hash
+
+    @property
+    def graph(self) -> dict[Vertex, set[Vertex]]:
+        raise NotImplementedError
+
+    @property
+    def class_id(self) -> int:
+        raise NotImplementedError
 
 class PositionVertex(Vertex):
     """Class to represent positions of corners and edges"""
-    obj_name = "Position"
-    graph: dict[Vertex, set[Vertex]] = defaultdict(set)
+    class_id = 0
+    graph: dict[PositionVertex, set[PositionVertex]] = defaultdict(set)
 
 class PieceVertex(Vertex):
     """Class to represent corners and edges"""
-    obj_name = "Piece"
-    graph: dict[Vertex, set[Vertex]] = defaultdict(set)
+    class_id = 1
+    graph: dict[PieceVertex, set[PieceVertex]] = defaultdict(set)
 
 
-class Graph(Generic[T]):
+class WeakLinks:
     """
     Undirected graph class whose edges can be updated.
-    graph[vertex] is its set of neighbors.
+    Provides O(1) access to a vertex with minimal degree after initialization.
     """
     def __init__(self, adjacency: Optional[dict] = None):
-        self._adjacency: dict[T, set[T]] = adjacency or defaultdict(set)
+        self._adjacency: dict[Vertex, set[Vertex]] = adjacency or defaultdict(set)
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: Vertex, value: Vertex):
         """graph[k] = v adds the edge (k, v)"""
         self._adjacency[key].add(value)
         self._adjacency[value].add(key)
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: Vertex):
         """Removes all edges of a vertex if it exists"""
         neighbors = self._adjacency.get(key, set())
         for neighbor in tuple(neighbors):
             self.remove_edge(key, neighbor)
-        if key in self._adjacency and not self._adjacency[key]:
+        if key in self._adjacency:
             del self._adjacency[key]
 
-    def remove_edge(self, v1, v2):
+    def remove_edge(self, v1: Vertex, v2: Vertex):
         """Removes the edge (v1, v2) if it exists"""
         if v1 in self._adjacency:
             self._adjacency[v1].discard(v2)
-            # if not self._adjacency[v1]:
-            #     del self._adjacency[v1]
+            if not self._adjacency[v1]:
+                del self._adjacency[v1]
         if v2 in self._adjacency:
             self._adjacency[v2].discard(v1)
-            # if not self._adjacency[v2]:
-            #     del self._adjacency[v2]
+            if not self._adjacency[v2]:
+                del self._adjacency[v2]
 
     def copy(self):
-        copy = Graph()
+        copy = WeakLinks()
         copy._adjacency = {k: v.copy() for k, v in self._adjacency.items()}
         return copy
 
@@ -136,17 +164,14 @@ class Graph(Generic[T]):
     def items(self):
         return self._adjacency.items()
 
-    def items(self):
-        return self._adjacency.items()
-
     def __repr__(self):
         return f"{self.__class__.__name__}(\n{dict_print(self._adjacency)}\n)"
 
     def __eq__(self, other):
-        return isinstance(other, Graph) and self._adjacency == other._adjacency
+        return isinstance(other, WeakLinks) and self._adjacency == other._adjacency
 
 
-class BijectiveDict:
+class StrongLinks:
     def __init__(self, fwd: Optional[dict] = None, bwd: Optional[dict] = None):
         self._fwd: dict[PieceVertex, PositionVertex] = fwd or {}
         self._bwd: dict[PositionVertex, PieceVertex] = bwd or {}
@@ -157,7 +182,7 @@ class BijectiveDict:
             isinstance(key, Vertex)
             and isinstance(value, Vertex)
             and key.__class__ != value.__class__
-        ), "BijectiveDict should be used for links Piece <-> Position"
+        ), "StrongLinks should be used for links Piece <-> Position"
         if isinstance(key, PositionVertex):
             self.__setitem__(value, key)
             return
@@ -174,10 +199,7 @@ class BijectiveDict:
             raise ValueError(f"{item} isn't a Vertex object")
 
     def copy(self):
-        copy = BijectiveDict()
-        copy._fwd = self._fwd.copy()
-        copy._bwd = self._bwd.copy()
-        return copy
+        return StrongLinks(self._fwd.copy(), self._bwd.copy())
 
     def __contains__(self, item):
         return item in self._fwd or item in self._bwd
@@ -198,26 +220,17 @@ class BijectiveDict:
         return f'{self.__class__.__name__}(\n{dict_print(self._fwd)}\n\n{dict_print(self._bwd)}\n)'
 
     def __eq__(self, other):
-        return (
-            isinstance(other, BijectiveDict)
-            and (self._fwd == other._fwd)
-            and (self._bwd == other._bwd)
-        )
-
-
-WeakLinks = Graph[Vertex]
-StrongLinks = BijectiveDict
+        return isinstance(other, StrongLinks) and (self._fwd == other._fwd)
 
 
 def init_graph(
-        subclass: type,
-        vertex_groups: Union[list[list[str]], list[list[int]]],
+    subclass: Type[Vertex],
+    vertex_groups: Union[list[list[str]], list[list[int]]],
 ) -> None:
     """
     Initializes graph in the subclass from the given vertex groups.
     Should only be called once for PositionVertex and PieceVertex.
     """
-    subclass.graph = defaultdict(set)
     # initialize empty graph
     for group_id, vertex_group in enumerate(vertex_groups):
         for vertex_id, vertex_value in enumerate(vertex_group):
@@ -231,7 +244,7 @@ def init_graph(
 
 
 def initialize_links(
-        fixed_values: dict[str, list[int]],
+    fixed_values: dict[str, list[int]],
 ) -> tuple[WeakLinks, StrongLinks]:
     """
     Initializes graph of weak and strong links between pieces and positions and
@@ -245,7 +258,7 @@ def initialize_links(
     Args:
         fixed_values: name (e.g. 'U') -> values in that face (e.g. the center)
     """
-    strong_links = BijectiveDict()
+    strong_links = StrongLinks()
     # Set initial conditions
     original_positions = tuple(PositionVertex.graph)
     original_pieces = tuple(PieceVertex.graph)
@@ -267,13 +280,14 @@ def initialize_links(
             strong_links[fixed_val_vertex] = face_vertex
 
     # Set initial weak links
-    secondary_non_weak_links = Graph()  # filter the neighbor condition
+    secondary_non_weak_links = WeakLinks()  # filter the neighbor condition
     for piece, pos in strong_links.items():
         for piece_neigh in piece.neighbors():
             for pos_neigh in pos.neighbors():
                 for piece_neigh_rot, pos_neigh_rot in zip(piece_neigh.rotations(), pos_neigh.rotations()):
                     secondary_non_weak_links[piece_neigh_rot] = pos_neigh_rot
-    weak_links = Graph()
+
+    weak_links = WeakLinks()
     for piece in PieceVertex.graph:
         if piece in strong_links:  # filter the strong link condition
             continue
@@ -282,24 +296,24 @@ def initialize_links(
                 continue
             if pos in secondary_non_weak_links[piece]:
                 continue
-            if len(piece) != len(pos):
+            if piece.size != pos.size:
                 continue
             weak_links[piece] = pos
 
     return weak_links, strong_links
 
 
-def choose_next(weak_links: WeakLinks, strong_links: StrongLinks) -> Union[Vertex, bool]:
+def choose_next(
+    weak_links: WeakLinks,
+    strong_links: StrongLinks
+) -> Union[Vertex, bool]:
     """
     Get the position/piece that has the least number of weak links.
     If a position has no weak or strong links, it returns None.
-    NOTE: a smarter data structure like a heap can optimize this a lot
     """
     min_links = float('inf')
     chosen_element = len(strong_links) == num_pieces
     for element, neighbors in weak_links.items():
-        if element in strong_links:  # element has been matched
-            continue
         if not neighbors:  # element can't be matched
             return False
         if len(neighbors) < min_links:
@@ -337,7 +351,7 @@ def strengthen_link(
 def show_pairing(strong_links: StrongLinks) -> None:
     print("\nPairing:")
     for piece, pos in strong_links.items():
-        if len(piece) == 1:
+        if piece.size == 1:
             continue
         if pos.vertex_id == 0:
             print(f"{pos}: {piece}")
@@ -347,7 +361,7 @@ def check_solution(strong_links: StrongLinks) -> bool:
     """Check that the total orientation of the corners sums to zero"""
     orientation_sum = 0
     for piece, pos in strong_links.items():
-        if pos.vertex_id == 0 and len(piece) == 3:
+        if pos.vertex_id == 0 and piece.size == 3:
             orientation_sum += piece.vertex_id
     return orientation_sum % 3 == 0
 
@@ -431,8 +445,11 @@ if __name__ == "__main__":
     from time import time
     counter = 0
     start_time = time()
-    try:
-        main(weak_links, strong_links)
-    except TimeoutError:
-        pass
-    print(f"Solutions found: {counter}")
+    import cProfile
+    with cProfile.Profile() as pr:
+        try:
+            main(weak_links, strong_links)
+        except TimeoutError:
+            pass
+    pr.dump_stats(".prof")
+    print(f"Solutions found: {counter}")  # ~500 to ~1000 in 5s
