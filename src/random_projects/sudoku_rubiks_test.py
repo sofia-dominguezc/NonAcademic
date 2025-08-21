@@ -56,8 +56,8 @@ def test_cube_1():
     assert Piece5.neighbors() == {Piece4}
     assert Piece6.neighbors() == {Piece4}
 
-    assert strong_links == file.BijectiveDict()
-    expected_weak_links = file.Graph({
+    assert strong_links == file.StrongLinks()
+    expected_weak_links = file.WeakLinks({
         Piece1: {Position1, Position2, Position3, Position4, Position5, Position6},
         Piece2: {Position1, Position2, Position3, Position4, Position5, Position6},
         Piece3: {Position1, Position2, Position3, Position4, Position5, Position6},
@@ -94,11 +94,11 @@ def test_cube_1():
     )
     assert weak_links_1 == weak_links_2
     assert strong_links_1 == strong_links_2
-    assert strong_links_1 == file.BijectiveDict(
+    assert strong_links_1 == file.StrongLinks(
         {Piece1: Position1, Piece2: Position2},
         {Position1: Piece1, Position2: Piece2},
     )
-    expected_weak_links_1 = file.Graph({
+    expected_weak_links_1 = file.WeakLinks({
         Piece1: set(),
         Piece2: set(),
         Piece3: {Position4, Position5},
@@ -117,12 +117,12 @@ def test_cube_1():
     weak_links_3, strong_links_3 = file.strengthen_link(
         weak_links_1, strong_links_1, Piece3, Position4,
     )
-    assert strong_links_3 == file.BijectiveDict(
+    assert strong_links_3 == file.StrongLinks(
         {Piece1: Position1, Piece2: Position2, Piece3: Position4, Piece4: Position3},
         {Position1: Piece1, Position2: Piece2, Position3: Piece4, Position4: Piece3},
     )
     print(weak_links_3)
-    assert weak_links_3 == file.Graph({
+    assert weak_links_3 == file.WeakLinks({
         Piece5: {Position5, Position6},
         Piece6: {Position5, Position6},
         Position5: {Piece5, Piece6},
@@ -132,7 +132,7 @@ def test_cube_1():
     weak_links_4, strong_links_4 = file.strengthen_link(
         weak_links_3, strong_links_3, Piece5, Position5,
     )
-    assert strong_links_4 == file.BijectiveDict(
+    assert strong_links_4 == file.StrongLinks(
         {
             Piece1: Position1, Piece2: Position2, Piece3: Position4,
             Piece4: Position3, Piece5: Position5, Piece6: Position6
@@ -142,7 +142,7 @@ def test_cube_1():
             Position4: Piece3, Position5: Piece5, Position6: Piece6
         },
     )
-    assert weak_links_4 == file.Graph({})
+    assert weak_links_4 == file.WeakLinks({})
 
     file.PositionVertex.graph = defaultdict(set)
     file.PieceVertex.graph = defaultdict(set)
@@ -200,7 +200,7 @@ def test_cube_2():
         "a": [0], "b": [1], "c": [2], "d": [0],
     })
 
-    assert strong_links == file.BijectiveDict(
+    assert strong_links == file.StrongLinks(
         {
             FixVal1: Face1, FixVal2: Face2, FixVal3: Face3, FixVal4: Face4,
         },
@@ -208,7 +208,7 @@ def test_cube_2():
             Face1: FixVal1, Face2: FixVal2, Face3: FixVal3, Face4: FixVal4,
         },
     )
-    expected_weak_links = file.Graph({
+    expected_weak_links = file.WeakLinks({
         Piece1: {Position1, Position4, Position5, Position7, Position8},
         Piece2: {Position2, Position3, Position6, Position8, Position7},
         Piece3: {Position1, Position3, Position6},
@@ -236,7 +236,7 @@ def test_cube_2():
     )
     assert weak_links_1 == weak_links_2
     assert strong_links_1 == strong_links_2
-    assert strong_links_1 == file.BijectiveDict(
+    assert strong_links_1 == file.StrongLinks(
         {
             FixVal1: Face1, FixVal2: Face2, FixVal3: Face3, FixVal4: Face4,
             Piece1: Position1, Piece2: Position2
@@ -246,7 +246,7 @@ def test_cube_2():
             Position1: Piece1, Position2: Piece2
         },
     )
-    expected_weak_links_1 = file.Graph({
+    expected_weak_links_1 = file.WeakLinks({
         Piece1: set(),
         Piece2: set(),
         Piece3: {Position6},
