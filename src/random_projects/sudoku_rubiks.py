@@ -50,10 +50,6 @@ class Vertex:
         self.group_id = group_id
         self.size = len(group)
 
-    @property
-    def identifier(self) -> tuple[int, ...]:
-        return (self.class_id, self.vertex_id, self.group_id, self.size)
-
     def _get_rotations(self):
         """All rotations of the vertex in order"""
         out: list[Vertex] = []
